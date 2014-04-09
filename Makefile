@@ -12,6 +12,8 @@ STM32_LIB=$(LIBDIR)/libraries/STM32F10x_StdPeriph_Driver
 
 CMSIS_PLAT_SRC = $(CMSIS_LIB)/DeviceSupport/$(VENDOR)/$(PLAT)
 
+UNIT_TEST = $(LIBDIR)/unit_test
+
 all: main.bin
 
 main.bin: kernel.c context_switch.s syscall.s syscall.h
@@ -40,6 +42,7 @@ main.bin: kernel.c context_switch.s syscall.s syscall.h
 		context_switch.s \
 		syscall.s \
 		stm32_p103.c \
+		unit_test.c \
 		kernel.c \
 		memcpy.s
 	$(CROSS_COMPILE)objcopy -Obinary main.elf main.bin
@@ -48,7 +51,8 @@ main.bin: kernel.c context_switch.s syscall.s syscall.h
 qemu: main.bin $(QEMU_STM32)
 	$(QEMU_STM32) -M stm32-p103 -kernel main.bin
 
-qemudbg: main.bin $(QEMU_STM32)
+qemudbg: unit_test.c unit_test.h
+	$(MAKE) main.bin DEBUG_FLAGS=-DDEBUG
 	$(QEMU_STM32) -M stm32-p103 \
 		-gdb tcp::3333 -S \
 		-kernel main.bin
@@ -73,6 +77,45 @@ qemudbg_remote_bg: main.bin $(QEMU_STM32)
 		-gdb tcp::3333 -S \
 		-kernel main.bin \
 		-vnc :1 &
+
+check: unit_test.c unit_test.h
+	$(MAKE) main.bin DEBUG_FLAGS=-DDEBUG
+	$(QEMU_STM32) -M stm32-p103 \
+		-gdb tcp::3333 -S \
+		-serial stdio \
+		-kernel main.bin -monitor null >/dev/null &
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-strlen.in
+	@mv -f gdb.txt $(UNIT_TEST)/test-strlen.txt
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-strcpy.in
+	@mv -f gdb.txt $(UNIT_TEST)/test-strcpy.txt
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-strcmp.in
+	@mv -f gdb.txt $(UNIT_TEST)/test-strcmp.txt
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-strncmp.in
+	@mv -f gdb.txt $(UNIT_TEST)/test-strncmp.txt
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-cmdtok.in
+	@mv -f gdb.txt $(UNIT_TEST)/test-cmdtok.txt
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-itoa.in
+	@mv -f gdb.txt $(UNIT_TEST)/test-itoa.txt
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-find_events.in
+	@mv -f gdb.txt $(UNIT_TEST)/-find_events.txt
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-find_envvar.in
+	@mv -f gdb.txt $(UNIT_TEST)/test-find_envvar.txt
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-fill_arg.in
+	@mv -f gdb.txt $(UNIT_TEST)/test-fill_arg.txt
+	@echo
+	$(CROSS_COMPILE)gdb -batch -x $(UNIT_TEST)/test-export_envvar.in
+	@mv -f gdb.txt $(UNIT_TEST)/test-export_envvar.txt
+	@echo
+	@pkill -9 $(notdir $(QEMU_STM32))
 
 emu: main.bin
 	bash emulate.sh main.bin
